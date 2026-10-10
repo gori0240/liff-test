@@ -155,16 +155,38 @@
         if (liff.isLoggedIn()) {
           liffIdToken = liff.getIDToken();
           
-          // 撮影会一覧を取得
-          callGasApi('getEvents').then(res => {
+          // ★変更: 撮影会一覧と過去プロフィールを並行して取得する
+          Promise.all([
+            callGasApi('getEvents'),
+            callGasApi('getCustomerProfile', { line_id_token: liffIdToken })
+          ]).then(responses => {
+            var eventsRes = responses[0];
+            var profileRes = responses[1];
+
             loadingEl.style.display = 'none';
             document.getElementById('tabContainer').style.display = 'flex';
             document.getElementById('applyTab').classList.add('active');
             
-            if (res.success) {
-              renderEvents(res.data);
+            // 撮影会一覧の描画
+            if (eventsRes.success) {
+              renderEvents(eventsRes.data);
             } else {
-              document.getElementById('eventList').innerHTML = '<p style="color:red;">エラー: ' + res.error.message + '</p>';
+              document.getElementById('eventList').innerHTML = '<p style="color:red;">エラー: ' + eventsRes.error.message + '</p>';
+            }
+
+            // ★追加: 過去プロフィール情報があればフォームに自動入力
+            if (profileRes.success && profileRes.data) {
+              if (profileRes.data.name) {
+                document.getElementById('appName').value = profileRes.data.name;
+                document.getElementById('reqName').value = profileRes.data.name; // リクエストタブにも入力
+              }
+              if (profileRes.data.email) {
+                document.getElementById('appEmail').value = profileRes.data.email;
+                document.getElementById('reqEmail').value = profileRes.data.email; // リクエストタブにも入力
+              }
+              if (profileRes.data.child_info) {
+                document.getElementById('appChild').value = profileRes.data.child_info;
+              }
             }
           });
         } else {
