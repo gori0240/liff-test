@@ -1,47 +1,71 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LIFF初期化テスト</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LIFF & API 疎通テスト</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+    #log { background: #f4f4f4; padding: 10px; border-radius: 5px; font-size: 0.9rem; white-space: pre-wrap; word-wrap: break-word; }
+    .success { color: green; font-weight: bold; }
+    .error { color: red; font-weight: bold; }
+  </style>
 </head>
 <body>
-  <h2>LIFF初期化テスト</h2>
-  <pre id="result">テスト準備中...</pre>
+  <h2>疎通テスト画面</h2>
+  <div id="log">起動中...</div>
 
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
-    const result = document.getElementById('result');
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbyn-PtGsFleWYmvFTufvbQ1ayg456sJ9hYEHB5ohbtCBCXUZALuJkNIaHgub8jk0nLa/exec';
+    const LIFF_ID = '2011960473-Iq3sX8wI';
+    const logEl = document.getElementById('log');
 
-    function log(message) {
-      result.textContent += '\n' + message;
+    function addLog(msg, type = '') {
+      logEl.innerHTML += `<div class="${type}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
     }
 
-    result.textContent = 'ページURL：' + location.href;
-    log('SDK：' + typeof liff);
+    window.onload = function() {
+      logEl.innerHTML = '';
+      addLog('1. LIFF初期化を開始します...');
 
-    if (typeof liff !== 'undefined') {
-      log('LINE内：' + liff.isInClient());
-
-      liff.init({
-        liffId: '2011960473-Iq3sX8wI'
-      }).then(() => {
-        log('初期化成功');
-        log('ログイン状態：' + liff.isLoggedIn());
-
+      liff.init({ liffId: LIFF_ID }).then(() => {
+        addLog('2. LIFF初期化成功', 'success');
+        
         if (liff.isLoggedIn()) {
-          log('IDトークン：' +
-            (liff.getIDToken() ? '取得成功' : '取得できない'));
+          const idToken = liff.getIDToken();
+          addLog('3. LINEログイン確認済。トークン長: ' + (idToken ? idToken.length : 'なし'));
+          testGasApi();
+        } else {
+          addLog('3. 未ログイン状態です（外部ブラウザ等）。', 'error');
         }
-      }).catch(error => {
-        log('初期化失敗');
-        log('コード：' + (error.code || 'なし'));
-        log('内容：' + (error.message || String(error)));
+      }).catch((err) => {
+        addLog('LIFF初期化エラー: ' + err.message, 'error');
       });
+    };
 
-      setTimeout(() => {
-        log('15秒後も初期化が終わっていない可能性があります');
-      }, 15000);
+    function testGasApi() {
+      addLog('4. GASへのAPI通信(getEvents)を開始します...');
+      
+      // text/plain でPOST送信
+      fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'getEvents' })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          addLog('5. GAS通信成功！', 'success');
+          addLog('取得した撮影会数: ' + data.data.length);
+          addLog('取得データ: ' + JSON.stringify(data.data));
+        } else {
+          addLog('GAS内部エラー: ' + data.error.message, 'error');
+        }
+      })
+      .catch(err => {
+        addLog('通信失敗(CORSエラー等の可能性): ' + err.message, 'error');
+      });
     }
   </script>
 </body>
