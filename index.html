@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LIFF初期化テスト</title>
+</head>
+<body>
+  <h2>LIFF初期化テスト</h2>
+  <pre id="result">テスト準備中...</pre>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    const result = document.getElementById('result');
+
+    function log(message) {
+      result.textContent += '\n' + message;
+    }
+
+    result.textContent = 'ページURL：' + location.href;
+    log('SDK：' + typeof liff);
+
+    if (typeof liff !== 'undefined') {
+      log('LINE内：' + liff.isInClient());
+
+      liff.init({
+        liffId: 'ここにテスト用LIFF ID'
+      }).then(() => {
+        log('初期化成功');
+        log('ログイン状態：' + liff.isLoggedIn());
+
+        if (liff.isLoggedIn()) {
+          log('IDトークン：' +
+            (liff.getIDToken() ? '取得成功' : '取得できない'));
+        }
+      }).catch(error => {
+        log('初期化失敗');
+        log('コード：' + (error.code || 'なし'));
+        log('内容：' + (error.message || String(error)));
+      });
+
+      setTimeout(() => {
+        log('15秒後も初期化が終わっていない可能性があります');
+      }, 15000);
+    }
+  </script>
+</body>
+</html>
