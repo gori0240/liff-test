@@ -164,6 +164,21 @@
       document.getElementById('viewForm').style.display = 'block';
       document.getElementById('formTitle').innerText = currentEvent.title;
       
+      // ★追加: 残り枠数に基づいて、人数のプルダウン選択肢を動的に生成する
+      let availableSlots = currentEvent.remaining_slots;
+      if (isUpdating) {
+        // 変更時は「自分が現在確保している枠数」も利用可能枠として足す
+        availableSlots += parseInt(existingApp.children_count, 10);
+      }
+      
+      // 選択肢は最大5人までとし、空き枠と比べて少ない方を上限にする
+      let maxSelectable = Math.min(5, availableSlots);
+      let selectHtml = '';
+      for (let i = 1; i <= maxSelectable; i++) {
+        selectHtml += `<option value="${i}">${i}人</option>`;
+      }
+      document.getElementById('appChildCount').innerHTML = selectHtml;
+
       if (isUpdating) {
         // ★ 予約変更・キャンセルモード
         document.getElementById('formMeta').innerHTML = `<span style="color:red; font-weight:bold;">※既にご予約済みです。内容の変更・キャンセルが可能です。</span><br>${currentEvent.event_date}`;
