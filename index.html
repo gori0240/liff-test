@@ -77,7 +77,7 @@
   <script>
     const GAS_URL = 'https://script.google.com/macros/s/AKfycbyn-PtGsFleWYmvFTufvbQ1ayg456sJ9hYEHB5ohbtCBCXUZALuJkNIaHgub8jk0nLa/exec';
     const LIFF_ID = '2011952211-XK8cPCVY';
-    var liffIdToken = null, currentEvent = null;
+    var liffIdToken = null, currentEvent = null, existingApp = null;
 
     async function callGasApi(action, data = {}) {
       try {
@@ -88,27 +88,32 @@
 
     window.onload = function() {
       liff.init({ liffId: LIFF_ID }).then(() => {
-        // ★ 変更: 未ログイン時はエラーにせず、LINEログイン処理を呼び出す
         if (!liff.isLoggedIn()) {
-          // ログイン後、現在開こうとしていたURL（パラメータ付き）に自動で戻ってきます
           liff.login({ redirectUri: window.location.href });
           return;
         }
-
         liffIdToken = liff.getIDToken();
         const urlParams = new URLSearchParams(window.location.search);
         const eventId = urlParams.get('event_id');
         
         if (eventId) {
-          callGasApi('getEventDetails', { event_id: eventId }).then(res => {
+          // ★変更: line_id_token を渡して既存予約を確認する
+          callGasApi('getEventDetails', { event_id: eventId, line_id_token: liffIdToken }).then(res => {
             document.getElementById('loading').style.display = 'none';
             if (!res.success) return alert(res.error.message);
-            currentEvent = res.data;
-            if (currentEvent.is_accepting) showForm();
-            else if (currentEvent.is_full) showWaiting();
-            else {
+            
+            currentEvent = res.data.event;
+            existingApp = res.data.existing_app;
+            
+            if (existingApp) {
+              showForm(true); // 予約済みの場合は変更画面
+            } else if (currentEvent.is_accepting) {
+              showForm(false);
+            } else if (currentEvent.is_full) {
+              showWaiting();
+            } else {
               document.getElementById('loading').style.display = 'block';
-              document.getElementById('loading').innerText = "現在受付を停止しています";
+              document.getElementById('loading').innerText = "現在受付を停止しているか、受付期間外です。";
             }
           });
         } else {
@@ -118,9 +123,8 @@
           });
         }
         
-        // 過去プロフィールの自動入力
         callGasApi('getCustomerProfile', { line_id_token: liffIdToken }).then(res => {
-          if (res.success && res.data && res.data.name) {
+          if (res.success && res.data && res.data.name && !existingApp) {
             document.getElementById('appName').value = res.data.name;
             document.getElementById('waitName').value = res.data.name;
           }
@@ -135,59 +139,55 @@
       let html = '';
       events.forEach(ev => {
         let status = ev.is_accepting ? `<span style="color:green">空き: ${ev.remaining_slots}組</span>` : `<span style="color:red">満員</span>`;
-        
-        // ★ 変更箇所: location.href (ページ遷移) をやめ、関数呼び出しに変更
-        html += `<div class="event-item" onclick="loadEventDetails('${ev.event_id}')">
+        html += `<div class="event-item" onclick="location.href='?event_id=${ev.event_id}'">
           <strong>${ev.event_date} : ${ev.title}</strong><br>${status}
         </div>`;
       });
       document.getElementById('eventList').innerHTML = html || '現在募集中の撮影会はありません';
     }
 
-    // ★ 追加する関数: 画面をリロードせずに撮影会情報を取得してフォームを表示する
-    function loadEventDetails(eventId) {
-      document.getElementById('viewList').style.display = 'none'; // 一覧を隠す
-      document.getElementById('loading').style.display = 'block'; // ローディングを表示
-      document.getElementById('loading').innerText = "撮影会情報を読み込んでいます...";
-
-      // 裏側でGASと通信
-      callGasApi('getEventDetails', { event_id: eventId }).then(res => {
-        document.getElementById('loading').style.display = 'none';
-        if (!res.success) return alert(res.error.message);
-        
-        currentEvent = res.data;
-        if (currentEvent.is_accepting) {
-          showForm(); // 申込みフォームを表示
-        } else if (currentEvent.is_full) {
-          showWaiting(); // キャンセル待ち画面を表示
-        } else {
-          document.getElementById('loading').style.display = 'block';
-          document.getElementById('loading').innerText = "現在受付を停止しています";
-        }
-      });
-    }
-
-    function showForm() {
+    function showForm(isUpdating) {
       document.getElementById('viewForm').style.display = 'block';
       document.getElementById('formTitle').innerText = currentEvent.title;
-      document.getElementById('formMeta').innerText = `${currentEvent.event_date} | 空き枠: ${currentEvent.remaining_slots}`;
-      generateChildFields();
+      
+      // ★ 既存予約がある場合、フォームに値を初期セットする
+      if (isUpdating) {
+        document.getElementById('formMeta').innerHTML = `<span style="color:red; font-weight:bold;">※既にご予約済みです。内容の変更・キャンセルが可能です。</span><br>${currentEvent.event_date}`;
+        document.getElementById('appName').value = existingApp.name;
+        document.getElementById('appNotes').value = existingApp.notes;
+        document.getElementById('appChildCount').value = existingApp.children_count;
+        generateChildFields(existingApp.children);
+        
+        // UIの切り替え
+        document.getElementById('viewForm').insertAdjacentHTML('beforeend', `<button id="btnCancelRes" class="btn" style="background:var(--danger); margin-top:15px;" onclick="cancelReservation()">この予約をキャンセルする</button>`);
+        document.getElementById('modal').querySelector('h2').innerText = "変更内容の確認";
+        document.getElementById('btnSubmit').innerText = "変更を確定する";
+      } else {
+        document.getElementById('formMeta').innerText = `${currentEvent.event_date} | 空き枠: ${currentEvent.remaining_slots}`;
+        generateChildFields();
+      }
     }
 
     function showWaiting() {
       document.getElementById('viewWaiting').style.display = 'block';
     }
 
-    function generateChildFields() {
+    function generateChildFields(presetChildren = null) {
       const count = parseInt(document.getElementById('appChildCount').value, 10);
       let html = '';
+      const ages = ["3ヶ月未満", "6ヶ月未満", "9ヶ月未満", "1歳未満", "1歳6ヶ月未満", "2歳未満", "2歳", "3歳"];
+      
       for (let i = 1; i <= count; i++) {
+        let preName = (presetChildren && presetChildren[i-1]) ? presetChildren[i-1].name : '';
+        let preAge = (presetChildren && presetChildren[i-1]) ? presetChildren[i-1].age : '';
+        
+        let options = '<option value="">選択してください</option>';
+        ages.forEach(a => { options += `<option value="${a}" ${a === preAge ? 'selected' : ''}>${a}</option>`; });
+        
         html += `<div style="padding:10px; background:#F8F9FA; border-radius:4px; margin-bottom:10px;">
-          <label>お子様${i}の呼び名</label><input type="text" id="childName_${i}" placeholder="ひらがな推奨">
+          <label>お子様${i}の呼び名</label><input type="text" id="childName_${i}" placeholder="ひらがな推奨" value="${preName}">
           <label>お子様${i}の年齢</label>
-          <select id="childAge_${i}">
-            <option value="">選択してください</option><option value="3ヶ月未満">3ヶ月未満</option><option value="6ヶ月未満">6ヶ月未満</option><option value="9ヶ月未満">9ヶ月未満</option><option value="1歳未満">1歳未満</option><option value="1歳6ヶ月未満">1歳6ヶ月未満</option><option value="2歳未満">2歳未満</option><option value="2歳">2歳</option><option value="3歳">3歳</option>
-          </select>
+          <select id="childAge_${i}">${options}</select>
         </div>`;
       }
       document.getElementById('childFields').innerHTML = html;
@@ -215,7 +215,7 @@
       }
       
       let html = `<strong>保護者:</strong> ${name}<br><strong>子供人数:</strong> ${count}人<br>`;
-      children.forEach((c, i) => { html += `・${c.name} (${c.age})<br>`; });
+      children.forEach((c) => { html += `・${c.name} (${c.age})<br>`; });
       html += `<br><strong>確定料金:</strong> ${calculatePrice().toLocaleString()}円`;
       
       document.getElementById('confirmHtml').innerHTML = html;
@@ -228,17 +228,17 @@
       for (let i = 1; i <= count; i++) children.push({ name: document.getElementById(`childName_${i}`).value, age: document.getElementById(`childAge_${i}`).value });
       
       const payload = {
-        event_id: currentEvent.event_id,
-        name: document.getElementById('appName').value,
-        children: children,
-        notes: document.getElementById('appNotes').value,
-        line_id_token: liffIdToken
+        event_id: currentEvent.event_id, name: document.getElementById('appName').value,
+        children: children, notes: document.getElementById('appNotes').value, line_id_token: liffIdToken
       };
 
       document.getElementById('btnSubmit').disabled = true;
       document.getElementById('submitError').innerText = '';
       
-      const res = await callGasApi('submitApply', payload);
+      // ★ 新規か変更かでAPIの送信先を分ける
+      const action = existingApp ? 'updateApplication' : 'submitApply';
+      const res = await callGasApi(action, payload);
+      
       if (res.success) {
         document.getElementById('modal').style.display = 'none';
         document.getElementById('viewForm').style.display = 'none';
@@ -246,6 +246,21 @@
       } else {
         document.getElementById('submitError').innerText = res.error.message;
         document.getElementById('btnSubmit').disabled = false;
+      }
+    }
+
+    // ★ ユーザー自身によるキャンセルの実行
+    async function cancelReservation() {
+      if (!confirm("本当にこのご予約をキャンセルしますか？\n※キャンセル後は取り消せません。")) return;
+      document.getElementById('btnCancelRes').disabled = true;
+      
+      const res = await callGasApi('userCancelApplication', { event_id: currentEvent.event_id, line_id_token: liffIdToken });
+      if (res.success) {
+        alert("ご予約のキャンセルが完了しました。");
+        location.reload(); // 画面を再読み込み
+      } else {
+        alert(res.error.message);
+        document.getElementById('btnCancelRes').disabled = false;
       }
     }
 
