@@ -124,11 +124,36 @@
       let html = '';
       events.forEach(ev => {
         let status = ev.is_accepting ? `<span style="color:green">空き: ${ev.remaining_slots}組</span>` : `<span style="color:red">満員</span>`;
-        html += `<div class="event-item" onclick="location.href='?event_id=${ev.event_id}'">
+        
+        // ★ 変更箇所: location.href (ページ遷移) をやめ、関数呼び出しに変更
+        html += `<div class="event-item" onclick="loadEventDetails('${ev.event_id}')">
           <strong>${ev.event_date} : ${ev.title}</strong><br>${status}
         </div>`;
       });
       document.getElementById('eventList').innerHTML = html || '現在募集中の撮影会はありません';
+    }
+
+    // ★ 追加する関数: 画面をリロードせずに撮影会情報を取得してフォームを表示する
+    function loadEventDetails(eventId) {
+      document.getElementById('viewList').style.display = 'none'; // 一覧を隠す
+      document.getElementById('loading').style.display = 'block'; // ローディングを表示
+      document.getElementById('loading').innerText = "撮影会情報を読み込んでいます...";
+
+      // 裏側でGASと通信
+      callGasApi('getEventDetails', { event_id: eventId }).then(res => {
+        document.getElementById('loading').style.display = 'none';
+        if (!res.success) return alert(res.error.message);
+        
+        currentEvent = res.data;
+        if (currentEvent.is_accepting) {
+          showForm(); // 申込みフォームを表示
+        } else if (currentEvent.is_full) {
+          showWaiting(); // キャンセル待ち画面を表示
+        } else {
+          document.getElementById('loading').style.display = 'block';
+          document.getElementById('loading').innerText = "現在受付を停止しています";
+        }
+      });
     }
 
     function showForm() {
