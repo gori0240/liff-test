@@ -88,7 +88,13 @@
 
     window.onload = function() {
       liff.init({ liffId: LIFF_ID }).then(() => {
-        if (!liff.isLoggedIn()) return document.getElementById('loading').innerHTML = "LINEアプリから開いてください";
+        // ★ 変更: 未ログイン時はエラーにせず、LINEログイン処理を呼び出す
+        if (!liff.isLoggedIn()) {
+          // ログイン後、現在開こうとしていたURL（パラメータ付き）に自動で戻ってきます
+          liff.login({ redirectUri: window.location.href });
+          return;
+        }
+
         liffIdToken = liff.getIDToken();
         const urlParams = new URLSearchParams(window.location.search);
         const eventId = urlParams.get('event_id');
@@ -100,7 +106,10 @@
             currentEvent = res.data;
             if (currentEvent.is_accepting) showForm();
             else if (currentEvent.is_full) showWaiting();
-            else document.getElementById('loading').innerHTML = "現在受付を停止しています";
+            else {
+              document.getElementById('loading').style.display = 'block';
+              document.getElementById('loading').innerText = "現在受付を停止しています";
+            }
           });
         } else {
           callGasApi('getEvents').then(res => {
@@ -116,6 +125,8 @@
             document.getElementById('waitName').value = res.data.name;
           }
         });
+      }).catch(function(err) {
+        document.getElementById('loading').innerHTML = "<span style='color:red;'>LIFF初期化エラー:<br>" + err.message + "</span>";
       });
     };
 
