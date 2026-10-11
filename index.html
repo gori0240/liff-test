@@ -3,309 +3,227 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>撮影会 申込・リクエスト</title>
+  <title>撮影会 申込み</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
+    /* CSSは既存踏襲 */
     :root { --primary: #2C3E50; --accent: #3498DB; --bg: #F5F7FA; --text: #333; --border: #BDC3C7; --disabled: #95A5A6; }
-    body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    body { font-family: sans-serif; background: var(--bg); color: var(--text); padding: 15px; margin:0;}
     .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
-    
-    .tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
-    .tab-btn { flex: 1; padding: 12px; text-align: center; cursor: pointer; background: #E2E8F0; border: none; font-weight: bold; color: var(--text); font-size: 0.95rem; border-radius: 8px 8px 0 0; }
-    .tab-btn.active { background: var(--accent); color: #fff; }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-
-    h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 2px solid var(--border); padding-bottom: 10px; }
-    .form-group { margin-bottom: 15px; }
-    label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 0.9rem; }
-    input[type="text"], input[type="email"], textarea, select { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-size: 1rem; }
-    .btn-submit { width: 100%; padding: 12px; background: var(--accent); color: white; border: none; border-radius: 4px; font-size: 1.1rem; font-weight: bold; cursor: pointer; }
-    .btn-submit:disabled { background: var(--disabled); cursor: not-allowed; }
-    
-    .event-label { display: block; padding: 15px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 10px; cursor: pointer; position: relative; }
-    .event-label:hover { background: #F8F9FA; }
-    .event-label.disabled { background: #F0F3F4; color: var(--disabled); cursor: not-allowed; border-color: #D5DBDB; }
-    .event-title { font-weight: bold; font-size: 1.1rem; display: block; margin-bottom: 5px; }
-    .event-meta { font-size: 0.9rem; color: #666; margin-left: 25px; }
-    .price-tag { display: inline-block; background: #FFF3CD; color: #856404; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-bottom: 5px; }
-    .notice-tag { display: inline-block; background: #FADBD8; color: #78281F; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-bottom: 10px; }
-    
-    #loading { text-align: center; padding: 20px; font-weight: bold; color: #666; }
-    .success-msg { text-align: center; color: #27AE60; font-weight: bold; padding: 20px; line-height: 1.6; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; margin-bottom: 15px;}
+    .btn { width: 100%; padding: 12px; background: var(--accent); color: white; border: none; border-radius: 4px; font-size: 1.1rem; font-weight: bold; cursor: pointer; }
+    .btn:disabled { background: var(--disabled); cursor: not-allowed; }
+    .event-item { padding: 15px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 10px; cursor: pointer; }
+    #modal { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); align-items:center; justify-content:center; padding: 20px;}
+    .modal-content { background:#fff; padding:20px; border-radius:8px; width:100%; max-width:400px; max-height:80vh; overflow-y:auto; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="tabs" id="tabContainer" style="display: none;">
-      <button class="tab-btn active" onclick="switchTab(event, 'applyTab')">撮影会に申込む</button>
-      <button class="tab-btn" onclick="switchTab(event, 'requestTab')">撮影会をリクエスト</button>
-    </div>
+  <div id="loading" style="text-align:center; padding:30px;">LINE情報を読み込んでいます...</div>
 
-    <div id="loading">情報を読み込んでいます...</div>
+  <!-- 一覧画面 -->
+  <div id="viewList" style="display:none;" class="card">
+    <h2>参加したい撮影会を選択</h2>
+    <div id="eventList"></div>
+  </div>
 
-    <!-- 申込タブ -->
-    <div id="applyTab" class="tab-content">
-      <div class="card" id="applyFormCard">
-        <h2>参加したい撮影会を選択</h2>
-        <div id="eventList"></div>
+  <!-- 申込みフォーム画面 -->
+  <div id="viewForm" style="display:none;" class="card">
+    <h2 id="formTitle"></h2>
+    <p id="formMeta" style="color:#666; font-size:0.9rem;"></p>
+    
+    <label>保護者のお名前（必須）</label>
+    <input type="text" id="appName" placeholder="例: 山田 花子">
+    
+    <label>参加するお子様の人数（必須）</label>
+    <select id="appChildCount" onchange="generateChildFields()">
+      <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option>
+    </select>
+    
+    <div id="childFields"></div>
+    
+    <label>備考・ご質問（任意）</label>
+    <textarea id="appNotes" rows="3"></textarea>
+    
+    <div id="previewPrice" style="font-weight:bold; font-size:1.2rem; color:var(--accent); margin-bottom:15px; text-align:center;"></div>
+    <button class="btn" onclick="showConfirm()">入力内容を確認する</button>
+  </div>
 
-        <h2 style="margin-top: 30px;">お客様情報</h2>
-        <div class="form-group">
-          <label>お名前（必須）</label>
-          <input type="text" id="appName" placeholder="例: 山田 花子">
-        </div>
-        <div class="form-group">
-          <label>メールアドレス（必須）</label>
-          <input type="email" id="appEmail" placeholder="例: sample@example.com">
-        </div>
-        <div class="form-group">
-          <label>お子様の情報など（任意）</label>
-          <input type="text" id="appChild" placeholder="例: 3歳男の子、5歳女の子">
-        </div>
-        <div class="form-group">
-          <label>備考・ご質問など（任意）</label>
-          <textarea id="appNotes" rows="3"></textarea>
-        </div>
-        <button id="btnSubmitApply" class="btn-submit" onclick="submitApply()">申し込む</button>
-        <div id="applyError" style="color: red; margin-top: 10px; text-align: center;"></div>
-      </div>
-      <div class="card" id="applySuccessCard" style="display: none;">
-        <div class="success-msg">
-          お申し込みが完了しました！<br><br>
-          ご入力いただいたメールアドレス宛に<br>確認メールを送信しましたのでご確認ください。
-        </div>
-      </div>
-    </div>
+  <!-- キャンセル待ちフォーム -->
+  <div id="viewWaiting" style="display:none;" class="card">
+    <h2>この撮影会は現在満員です</h2>
+    <p style="font-size:0.9rem;">空き枠が出た際にLINEへ一斉通知をお送りします。通知をご希望の方は以下よりご登録ください。</p>
+    <label>保護者のお名前（必須）</label>
+    <input type="text" id="waitName">
+    <button class="btn" id="btnWait" onclick="submitWaiting()">キャンセル待ちに登録する</button>
+  </div>
 
-    <!-- リクエストタブ -->
-    <div id="requestTab" class="tab-content">
-      <div class="card" id="requestFormCard">
-        <h2>撮影会をリクエストする</h2>
-        <p style="font-size: 0.85rem; color: #666; margin-bottom: 20px; line-height: 1.5;">
-          ご希望の日時や場所での撮影会をリクエストできます。
-        </p>
-        
-        <div class="form-group">
-          <label>ご希望の形式（必須）</label>
-          <select id="reqType">
-            <option value="PRIVATE">貸切撮影（ご家族やご友人のみ）</option>
-            <option value="GROUP">集団撮影（他の参加者の募集もOK）</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>お名前（必須）</label>
-          <input type="text" id="reqName" placeholder="例: 山田 花子">
-        </div>
-        <div class="form-group">
-          <label>メールアドレス（必須）</label>
-          <input type="email" id="reqEmail" placeholder="例: sample@example.com">
-        </div>
-        <div class="form-group">
-          <label>ご希望の日時・場所・内容（必須）</label>
-          <textarea id="reqText" rows="5" placeholder="例: 11月の中旬の土日で、〇〇公園での七五三撮影をお願いしたいです。"></textarea>
-        </div>
-        <button id="btnSubmitRequest" class="btn-submit" onclick="submitRequest()">リクエストを送信する</button>
-        <div id="requestError" style="color: red; margin-top: 10px; text-align: center;"></div>
-      </div>
-      <div class="card" id="requestSuccessCard" style="display: none;">
-        <div class="success-msg">
-          リクエストを送信しました！<br><br>
-          内容を確認し、担当者よりメールにて<br>ご連絡させていただきます。
-        </div>
-      </div>
+  <!-- サクセス画面 -->
+  <div id="viewSuccess" style="display:none;" class="card" style="text-align:center; color:green; font-weight:bold;">
+    送信が完了しました！LINEの通知をお待ちください。
+  </div>
+
+  <!-- 確認モーダル -->
+  <div id="modal">
+    <div class="modal-content">
+      <h2>申込み内容の確認</h2>
+      <div id="confirmHtml" style="margin-bottom:20px; line-height:1.6; font-size:0.95rem;"></div>
+      <button class="btn" id="btnSubmit" onclick="executeSubmit()" style="margin-bottom:10px;">確定して申し込む</button>
+      <button class="btn" onclick="document.getElementById('modal').style.display='none'" style="background:#95A5A6;">修正する</button>
+      <div id="submitError" style="color:red; margin-top:10px;"></div>
     </div>
   </div>
 
   <script>
-    // ★ ここを必ず書き換えてください ★
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbyn-PtGsFleWYmvFTufvbQ1ayg456sJ9hYEHB5ohbtCBCXUZALuJkNIaHgub8jk0nLa/exec';
-    const LIFF_ID = '2011952211-XK8cPCVY';
-    
-    var liffIdToken = null;
+    const GAS_URL = 'YOUR_GAS_WEBAPP_URL';
+    const LIFF_ID = 'YOUR_LIFF_ID';
+    var liffIdToken = null, currentEvent = null;
 
-    // --- 汎用API通信関数 ---
     async function callGasApi(action, data = {}) {
       try {
-        const response = await fetch(GAS_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ action: action, data: data })
-        });
-        return await response.json();
-      } catch (err) {
-        return { success: false, error: { message: '通信エラー: ' + err.message } };
-      }
+        const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: action, data: data }) });
+        return await res.json();
+      } catch (err) { return { success: false, error: { message: err.message } }; }
     }
 
-    // --- タブ切り替え制御 ---
-    function switchTab(e, tabId) {
-      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-      e.currentTarget.classList.add('active');
-      document.getElementById(tabId).classList.add('active');
-    }
-
-    // --- 初期化 ---
     window.onload = function() {
-      var loadingEl = document.getElementById('loading');
-      
-      liff.init({ liffId: LIFF_ID }).then(function() {
-        if (liff.isLoggedIn()) {
-          liffIdToken = liff.getIDToken();
-          
-          // ★変更: 撮影会一覧と過去プロフィールを並行して取得する
-          Promise.all([
-            callGasApi('getEvents'),
-            callGasApi('getCustomerProfile', { line_id_token: liffIdToken })
-          ]).then(responses => {
-            var eventsRes = responses[0];
-            var profileRes = responses[1];
-
-            loadingEl.style.display = 'none';
-            document.getElementById('tabContainer').style.display = 'flex';
-            document.getElementById('applyTab').classList.add('active');
-            
-            // 撮影会一覧の描画
-            if (eventsRes.success) {
-              renderEvents(eventsRes.data);
-            } else {
-              document.getElementById('eventList').innerHTML = '<p style="color:red;">エラー: ' + eventsRes.error.message + '</p>';
-            }
-
-            // ★追加: 過去プロフィール情報があればフォームに自動入力
-            if (profileRes.success && profileRes.data) {
-              if (profileRes.data.name) {
-                document.getElementById('appName').value = profileRes.data.name;
-                document.getElementById('reqName').value = profileRes.data.name; // リクエストタブにも入力
-              }
-              if (profileRes.data.email) {
-                document.getElementById('appEmail').value = profileRes.data.email;
-                document.getElementById('reqEmail').value = profileRes.data.email; // リクエストタブにも入力
-              }
-              if (profileRes.data.child_info) {
-                document.getElementById('appChild').value = profileRes.data.child_info;
-              }
-            }
+      liff.init({ liffId: LIFF_ID }).then(() => {
+        if (!liff.isLoggedIn()) return document.getElementById('loading').innerHTML = "LINEアプリから開いてください";
+        liffIdToken = liff.getIDToken();
+        const urlParams = new URLSearchParams(window.location.search);
+        const eventId = urlParams.get('event_id');
+        
+        if (eventId) {
+          callGasApi('getEventDetails', { event_id: eventId }).then(res => {
+            document.getElementById('loading').style.display = 'none';
+            if (!res.success) return alert(res.error.message);
+            currentEvent = res.data;
+            if (currentEvent.is_accepting) showForm();
+            else if (currentEvent.is_full) showWaiting();
+            else document.getElementById('loading').innerHTML = "現在受付を停止しています";
           });
         } else {
-          loadingEl.innerHTML = "<span style='color:orange;'>未ログイン状態です。<br>LINEアプリから開いてください。</span>";
+          callGasApi('getEvents').then(res => {
+            document.getElementById('loading').style.display = 'none';
+            if (res.success) renderList(res.data);
+          });
         }
-      }).catch(function(err) {
-        loadingEl.innerHTML = "<span style='color:red;'>LIFF初期化エラー:<br>" + err.message + "</span>";
+        
+        // 過去プロフィールの自動入力
+        callGasApi('getCustomerProfile', { line_id_token: liffIdToken }).then(res => {
+          if (res.success && res.data && res.data.name) {
+            document.getElementById('appName').value = res.data.name;
+            document.getElementById('waitName').value = res.data.name;
+          }
+        });
       });
     };
 
-    // --- 撮影会一覧描画 ---
-    function renderEvents(events) {
-      var container = document.getElementById('eventList');
-      if (!events || events.length === 0) {
-        container.innerHTML = '<p style="font-size:0.9rem; color:#666;">現在募集中の撮影会はありません。<br>よろしければ上のタブから「リクエスト」をお送りください。</p>';
-        return;
-      }
-
-      var html = '';
-      for (var i = 0; i < events.length; i++) {
-        var ev = events[i];
-        var disabledAttr = ev.is_accepting === false ? 'disabled' : '';
-        var labelClass = 'event-label' + (ev.is_accepting === false ? ' disabled' : '');
-        
-        var noticeHtml = '';
-        if (ev.is_accepting === false) {
-          var d = new Date(ev.open_at);
-          var dateStr = (d.getMonth() + 1) + '/' + d.getDate() + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
-          noticeHtml = '<div class="notice-tag">予告: ' + dateStr + ' 受付開始</div><br>';
-        }
-
-        var priceHtml = ev.price ? '<span class="price-tag">' + ev.price + '</span><br>' : '';
-
-        html += '<label class="' + labelClass + '">';
-        html += noticeHtml;
-        html += '<div style="display:flex; align-items:flex-start;">';
-        html += '<input type="radio" name="eventId" value="' + ev.event_id + '" ' + disabledAttr + ' style="margin-top:4px; margin-right:10px;">';
-        html += '<div>';
-        html += priceHtml;
-        html += '<span class="event-title">' + ev.event_date + ' : ' + ev.title + '</span>';
-        html += '<div class="event-meta">残り枠: ' + ev.remaining_slots + ' 組</div>';
-        html += '</div></div></label>';
-      }
-      container.innerHTML = html;
+    function renderList(events) {
+      document.getElementById('viewList').style.display = 'block';
+      let html = '';
+      events.forEach(ev => {
+        let status = ev.is_accepting ? `<span style="color:green">空き: ${ev.remaining_slots}組</span>` : `<span style="color:red">満員</span>`;
+        html += `<div class="event-item" onclick="location.href='?event_id=${ev.event_id}'">
+          <strong>${ev.event_date} : ${ev.title}</strong><br>${status}
+        </div>`;
+      });
+      document.getElementById('eventList').innerHTML = html || '現在募集中の撮影会はありません';
     }
 
-    // --- 申込送信 ---
-    async function submitApply() {
-      var radios = document.getElementsByName('eventId');
-      var selectedEventId = null;
-      for (var i = 0; i < radios.length; i++) {
-        if (radios[i].checked && !radios[i].disabled) {
-          selectedEventId = radios[i].value; break;
-        }
+    function showForm() {
+      document.getElementById('viewForm').style.display = 'block';
+      document.getElementById('formTitle').innerText = currentEvent.title;
+      document.getElementById('formMeta').innerText = `${currentEvent.event_date} | 空き枠: ${currentEvent.remaining_slots}`;
+      generateChildFields();
+    }
+
+    function showWaiting() {
+      document.getElementById('viewWaiting').style.display = 'block';
+    }
+
+    function generateChildFields() {
+      const count = parseInt(document.getElementById('appChildCount').value, 10);
+      let html = '';
+      for (let i = 1; i <= count; i++) {
+        html += `<div style="padding:10px; background:#F8F9FA; border-radius:4px; margin-bottom:10px;">
+          <label>お子様${i}の呼び名</label><input type="text" id="childName_${i}" placeholder="ひらがな推奨">
+          <label>お子様${i}の年齢</label>
+          <select id="childAge_${i}">
+            <option value="">選択してください</option><option value="3ヶ月未満">3ヶ月未満</option><option value="6ヶ月未満">6ヶ月未満</option><option value="9ヶ月未満">9ヶ月未満</option><option value="1歳未満">1歳未満</option><option value="1歳6ヶ月未満">1歳6ヶ月未満</option><option value="2歳未満">2歳未満</option><option value="2歳">2歳</option><option value="3歳">3歳</option>
+          </select>
+        </div>`;
       }
+      document.getElementById('childFields').innerHTML = html;
+      calculatePrice();
+    }
 
-      var name = document.getElementById('appName').value;
-      var email = document.getElementById('appEmail').value;
-      var childInfo = document.getElementById('appChild').value;
-      var notes = document.getElementById('appNotes').value;
+    function calculatePrice() {
+      const count = parseInt(document.getElementById('appChildCount').value, 10);
+      const unit = currentEvent.unit_price || 0;
+      const total = currentEvent.price_type === 'PER_CHILD' ? unit * count : unit;
+      document.getElementById('previewPrice').innerText = `予定料金: ${total.toLocaleString()} 円`;
+      return total;
+    }
 
-      if (!selectedEventId) { alert('撮影会を選択してください。'); return; }
-      if (!name || !email) { alert('お名前とメールアドレスは必須です。'); return; }
+    function showConfirm() {
+      const name = document.getElementById('appName').value.trim();
+      const count = parseInt(document.getElementById('appChildCount').value, 10);
+      if (!name) return alert('保護者名を入力してください');
+      let children = [];
+      for (let i = 1; i <= count; i++) {
+        let cName = document.getElementById(`childName_${i}`).value.trim();
+        let cAge = document.getElementById(`childAge_${i}`).value;
+        if (!cName || !cAge) return alert(`お子様${i}の情報をすべて入力してください`);
+        children.push({ name: cName, age: cAge });
+      }
+      
+      let html = `<strong>保護者:</strong> ${name}<br><strong>子供人数:</strong> ${count}人<br>`;
+      children.forEach((c, i) => { html += `・${c.name} (${c.age})<br>`; });
+      html += `<br><strong>確定料金:</strong> ${calculatePrice().toLocaleString()}円`;
+      
+      document.getElementById('confirmHtml').innerHTML = html;
+      document.getElementById('modal').style.display = 'flex';
+    }
 
-      var btn = document.getElementById('btnSubmitApply');
-      var errEl = document.getElementById('applyError');
-      btn.disabled = true; btn.textContent = '送信中...'; errEl.textContent = '';
-
-      var payload = {
-        event_id: selectedEventId,
-        name: name,
-        email: email,
-        child_info: childInfo,
-        notes: notes,
+    async function executeSubmit() {
+      const count = parseInt(document.getElementById('appChildCount').value, 10);
+      let children = [];
+      for (let i = 1; i <= count; i++) children.push({ name: document.getElementById(`childName_${i}`).value, age: document.getElementById(`childAge_${i}`).value });
+      
+      const payload = {
+        event_id: currentEvent.event_id,
+        name: document.getElementById('appName').value,
+        children: children,
+        notes: document.getElementById('appNotes').value,
         line_id_token: liffIdToken
       };
 
-      var res = await callGasApi('submitApply', payload);
+      document.getElementById('btnSubmit').disabled = true;
+      document.getElementById('submitError').innerText = '';
       
+      const res = await callGasApi('submitApply', payload);
       if (res.success) {
-        document.getElementById('applyFormCard').style.display = 'none';
-        document.getElementById('applySuccessCard').style.display = 'block';
-        document.getElementById('tabContainer').style.display = 'none';
+        document.getElementById('modal').style.display = 'none';
+        document.getElementById('viewForm').style.display = 'none';
+        document.getElementById('viewSuccess').style.display = 'block';
       } else {
-        btn.disabled = false; btn.textContent = '申し込む';
-        errEl.textContent = res.error ? res.error.message : 'エラーが発生しました';
+        document.getElementById('submitError').innerText = res.error.message;
+        document.getElementById('btnSubmit').disabled = false;
       }
     }
 
-    // --- リクエスト送信 ---
-    async function submitRequest() {
-      var reqType = document.getElementById('reqType').value;
-      var name = document.getElementById('reqName').value;
-      var email = document.getElementById('reqEmail').value;
-      var text = document.getElementById('reqText').value;
-
-      if (!name || !email || !text) { alert('すべての必須項目を入力してください。'); return; }
-
-      var btn = document.getElementById('btnSubmitRequest');
-      var errEl = document.getElementById('requestError');
-      btn.disabled = true; btn.textContent = '送信中...'; errEl.textContent = '';
-
-      var payload = {
-        request_type: reqType,
-        name: name,
-        email: email,
-        request_text: text,
-        line_id_token: liffIdToken
-      };
-
-      var res = await callGasApi('submitRequest', payload);
-      
+    async function submitWaiting() {
+      const name = document.getElementById('waitName').value.trim();
+      if (!name) return alert('お名前を入力してください');
+      document.getElementById('btnWait').disabled = true;
+      const res = await callGasApi('submitWaiting', { event_id: currentEvent.event_id, name: name, line_id_token: liffIdToken });
       if (res.success) {
-        document.getElementById('requestFormCard').style.display = 'none';
-        document.getElementById('requestSuccessCard').style.display = 'block';
-        document.getElementById('tabContainer').style.display = 'none';
+        document.getElementById('viewWaiting').style.display = 'none';
+        document.getElementById('viewSuccess').style.display = 'block';
       } else {
-        btn.disabled = false; btn.textContent = 'リクエストを送信する';
-        errEl.textContent = res.error ? res.error.message : 'エラーが発生しました';
+        alert(res.error.message);
+        document.getElementById('btnWait').disabled = false;
       }
     }
   </script>
