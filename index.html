@@ -6,20 +6,20 @@
   <title>撮影会 申込み</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    /* CSSは既存踏襲 */
-    :root { --primary: #2C3E50; --accent: #3498DB; --bg: #F5F7FA; --text: #333; --border: #BDC3C7; --disabled: #95A5A6; }
+    :root { --primary: #2C3E50; --accent: #3498DB; --bg: #F5F7FA; --text: #333; --border: #BDC3C7; --danger: #E74C3C; --disabled: #95A5A6; }
     body { font-family: sans-serif; background: var(--bg); color: var(--text); padding: 15px; margin:0;}
     .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
     input, select, textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; margin-bottom: 15px;}
     .btn { width: 100%; padding: 12px; background: var(--accent); color: white; border: none; border-radius: 4px; font-size: 1.1rem; font-weight: bold; cursor: pointer; }
     .btn:disabled { background: var(--disabled); cursor: not-allowed; }
+    .btn-danger { background: var(--danger); }
     .event-item { padding: 15px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 10px; cursor: pointer; }
     #modal { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); align-items:center; justify-content:center; padding: 20px;}
     .modal-content { background:#fff; padding:20px; border-radius:8px; width:100%; max-width:400px; max-height:80vh; overflow-y:auto; }
   </style>
 </head>
 <body>
-  <div id="loading" style="text-align:center; padding:30px;">LINE情報を読み込んでいます...</div>
+  <div id="loading" style="text-align:center; padding:30px;">情報を読み込んでいます...</div>
 
   <!-- 一覧画面 -->
   <div id="viewList" style="display:none;" class="card">
@@ -46,8 +46,11 @@
     <textarea id="appNotes" rows="3"></textarea>
     
     <div id="previewPrice" style="font-weight:bold; font-size:1.2rem; color:var(--accent); margin-bottom:15px; text-align:center;"></div>
+    
     <button class="btn" onclick="showConfirm()">入力内容を確認する</button>
-    <button id="btnCancelRes" class="btn" style="display:none; background:var(--danger); margin-top:15px;" onclick="cancelReservation()">この予約をキャンセルする</button>
+
+    <!-- ★ ここに最初から配置されたキャンセルボタン（初期は隠れている） -->
+    <button id="btnCancelRes" class="btn btn-danger" style="display:none; margin-top:15px;" onclick="cancelReservation()">この予約をキャンセルする</button>
   </div>
 
   <!-- キャンセル待ちフォーム -->
@@ -67,7 +70,7 @@
   <!-- 確認モーダル -->
   <div id="modal">
     <div class="modal-content">
-      <h2>申込み内容の確認</h2>
+      <h2 id="modalTitle">申込み内容の確認</h2>
       <div id="confirmHtml" style="margin-bottom:20px; line-height:1.6; font-size:0.95rem;"></div>
       <button class="btn" id="btnSubmit" onclick="executeSubmit()" style="margin-bottom:10px;">確定して申し込む</button>
       <button class="btn" onclick="document.getElementById('modal').style.display='none'" style="background:#95A5A6;">修正する</button>
@@ -76,8 +79,10 @@
   </div>
 
   <script>
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbyn-PtGsFleWYmvFTufvbQ1ayg456sJ9hYEHB5ohbtCBCXUZALuJkNIaHgub8jk0nLa/exec';
-    const LIFF_ID = '2011952211-XK8cPCVY';
+    // ★ 必ず書き換えてください ★
+    const GAS_URL = 'YOUR_GAS_WEBAPP_URL';
+    const LIFF_ID = 'YOUR_LIFF_ID';
+    
     var liffIdToken = null, currentEvent = null, existingApp = null;
 
     async function callGasApi(action, data = {}) {
@@ -98,25 +103,7 @@
         const eventId = urlParams.get('event_id');
         
         if (eventId) {
-          // ★変更: line_id_token を渡して既存予約を確認する
-          callGasApi('getEventDetails', { event_id: eventId, line_id_token: liffIdToken }).then(res => {
-            document.getElementById('loading').style.display = 'none';
-            if (!res.success) return alert(res.error.message);
-            
-            currentEvent = res.data.event;
-            existingApp = res.data.existing_app;
-            
-            if (existingApp) {
-              showForm(true); // 予約済みの場合は変更画面
-            } else if (currentEvent.is_accepting) {
-              showForm(false);
-            } else if (currentEvent.is_full) {
-              showWaiting();
-            } else {
-              document.getElementById('loading').style.display = 'block';
-              document.getElementById('loading').innerText = "現在受付を停止しているか、受付期間外です。";
-            }
-          });
+          loadEventDetails(eventId);
         } else {
           callGasApi('getEvents').then(res => {
             document.getElementById('loading').style.display = 'none';
@@ -135,12 +122,38 @@
       });
     };
 
+    function loadEventDetails(eventId) {
+      document.getElementById('viewList').style.display = 'none';
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('loading').innerText = "撮影会情報を読み込んでいます...";
+
+      // 一覧からタップした際も正しく既存予約を読み込めるよう line_id_token をセット
+      callGasApi('getEventDetails', { event_id: eventId, line_id_token: liffIdToken }).then(res => {
+        document.getElementById('loading').style.display = 'none';
+        if (!res.success) return alert(res.error.message);
+        
+        currentEvent = res.data.event;
+        existingApp = res.data.existing_app;
+        
+        if (existingApp) {
+          showForm(true); // 予約済み
+        } else if (currentEvent.is_accepting) {
+          showForm(false); // 新規申込み
+        } else if (currentEvent.is_full) {
+          showWaiting(); // キャンセル待ち
+        } else {
+          document.getElementById('loading').style.display = 'block';
+          document.getElementById('loading').innerText = "現在受付を停止しているか、受付期間外です。";
+        }
+      });
+    }
+
     function renderList(events) {
       document.getElementById('viewList').style.display = 'block';
       let html = '';
       events.forEach(ev => {
         let status = ev.is_accepting ? `<span style="color:green">空き: ${ev.remaining_slots}組</span>` : `<span style="color:red">満員</span>`;
-        html += `<div class="event-item" onclick="location.href='?event_id=${ev.event_id}'">
+        html += `<div class="event-item" onclick="loadEventDetails('${ev.event_id}')">
           <strong>${ev.event_date} : ${ev.title}</strong><br>${status}
         </div>`;
       });
@@ -151,26 +164,24 @@
       document.getElementById('viewForm').style.display = 'block';
       document.getElementById('formTitle').innerText = currentEvent.title;
       
-      // ★ 既存予約がある場合、フォームに値を初期セットする
       if (isUpdating) {
+        // ★ 予約変更・キャンセルモード
         document.getElementById('formMeta').innerHTML = `<span style="color:red; font-weight:bold;">※既にご予約済みです。内容の変更・キャンセルが可能です。</span><br>${currentEvent.event_date}`;
         document.getElementById('appName').value = existingApp.name;
         document.getElementById('appNotes').value = existingApp.notes;
         document.getElementById('appChildCount').value = existingApp.children_count;
         generateChildFields(existingApp.children);
         
-        // UIの切り替え（非表示にしておいたキャンセルボタンを表示する）
-        document.getElementById('btnCancelRes').style.display = 'block';
-        document.getElementById('modal').querySelector('h2').innerText = "変更内容の確認";
+        document.getElementById('btnCancelRes').style.display = 'block'; // キャンセルボタンを表示
+        document.getElementById('modalTitle').innerText = "変更内容の確認";
         document.getElementById('btnSubmit').innerText = "変更を確定する";
       } else {
+        // ★ 新規申込みモード
         document.getElementById('formMeta').innerText = `${currentEvent.event_date} | 空き枠: ${currentEvent.remaining_slots}`;
         
-        // 新規申込み時はキャンセルボタンを隠し、文言を標準に戻す
-        document.getElementById('btnCancelRes').style.display = 'none';
-        document.getElementById('modal').querySelector('h2').innerText = "申込み内容の確認";
+        document.getElementById('btnCancelRes').style.display = 'none'; // キャンセルボタンを隠す
+        document.getElementById('modalTitle').innerText = "申込み内容の確認";
         document.getElementById('btnSubmit').innerText = "確定して申し込む";
-        
         generateChildFields();
       }
     }
@@ -242,7 +253,6 @@
       document.getElementById('btnSubmit').disabled = true;
       document.getElementById('submitError').innerText = '';
       
-      // ★ 新規か変更かでAPIの送信先を分ける
       const action = existingApp ? 'updateApplication' : 'submitApply';
       const res = await callGasApi(action, payload);
       
@@ -256,7 +266,6 @@
       }
     }
 
-    // ★ ユーザー自身によるキャンセルの実行
     async function cancelReservation() {
       if (!confirm("本当にこのご予約をキャンセルしますか？\n※キャンセル後は取り消せません。")) return;
       document.getElementById('btnCancelRes').disabled = true;
@@ -264,7 +273,7 @@
       const res = await callGasApi('userCancelApplication', { event_id: currentEvent.event_id, line_id_token: liffIdToken });
       if (res.success) {
         alert("ご予約のキャンセルが完了しました。");
-        location.reload(); // 画面を再読み込み
+        location.reload(); 
       } else {
         alert(res.error.message);
         document.getElementById('btnCancelRes').disabled = false;
