@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>撮影のお申込み</title>
+  <title>撮影会のお申込み</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     :root { --primary: #2C3E50; --accent: #3498DB; --bg: #F5F7FA; --text: #333; --border: #BDC3C7; --danger: #E74C3C; --disabled: #95A5A6; }
@@ -14,19 +14,28 @@
     .btn:disabled { background: var(--disabled); cursor: not-allowed; }
     .btn-danger { background: var(--danger); }
     
-    /* ★新規追加: イベントカードのデザイン */
-    .event-item-flex { display: flex; justify-content: space-between; align-items: stretch; padding: 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 12px; cursor: pointer; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05);}
-    .event-item-flex:hover { background: #F8F9FA; }
+    .event-item-flex { display: flex; justify-content: space-between; align-items: stretch; padding: 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 12px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05);}
     .badge-status { color: #fff; border-radius: 6px; font-weight: bold; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; min-height: 56px; padding: 4px 6px; box-sizing: border-box; font-size: 0.95rem; line-height: 1.3;}
     .bg-green { background: #2ECC71; }
     .bg-red { background: #E74C3C; font-size: 1.1rem; }
     .bg-gray { background: #95A5A6; font-size: 0.75rem; }
+
+    /* ★ 左上の戻るボタン用デザイン */
+    .top-header { display: none; margin-bottom: 15px; align-items: center; }
+    .btn-back { background: transparent; border: none; color: var(--accent); font-weight: bold; font-size: 1.05rem; cursor: pointer; padding: 5px 0; display: flex; align-items: center; }
+    .btn-back::before { content: '←'; margin-right: 6px; font-size: 1.2rem; }
 
     #modal { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); align-items:center; justify-content:center; padding: 20px;}
     .modal-content { background:#fff; padding:20px; border-radius:8px; width:100%; max-width:400px; max-height:80vh; overflow-y:auto; }
   </style>
 </head>
 <body>
+  
+  <!-- ★ 左上の共通ヘッダー（個別画面で表示） -->
+  <div id="topHeader" class="top-header">
+    <button class="btn-back" onclick="backToList()">一覧に戻る</button>
+  </div>
+
   <div id="loading" style="text-align:center; padding:30px;">情報を読み込んでいます...</div>
 
   <!-- 一覧画面 -->
@@ -61,7 +70,6 @@
     
     <button class="btn" onclick="showConfirm()">入力内容を確認する</button>
     <button id="btnCancelRes" class="btn btn-danger" style="display:none; margin-top:15px;" onclick="cancelReservation()">この予約をキャンセルする</button>
-    <button class="btn" style="background:var(--disabled); margin-top:15px;" onclick="backToList()">一覧に戻る</button>
   </div>
 
   <!-- キャンセル待ちフォーム -->
@@ -71,13 +79,17 @@
     <label>保護者のお名前（必須）</label>
     <input type="text" id="waitName">
     <button class="btn" id="btnWait" onclick="submitWaiting()">キャンセル待ちに登録する</button>
-    <button class="btn" style="background:var(--disabled); margin-top:15px;" onclick="backToList()">一覧に戻る</button>
+  </div>
+
+  <!-- ★ タップのタイミングずれエラー画面 -->
+  <div id="viewMessage" style="display:none;" class="card">
+    <h2 style="margin-top:0; border-bottom:2px solid var(--border); padding-bottom:10px;">お知らせ</h2>
+    <p id="messageText" style="text-align:center; padding:20px 0; font-size:1rem; color:#666; font-weight:bold;"></p>
   </div>
 
   <!-- サクセス画面 -->
   <div id="viewSuccess" style="display:none;" class="card" style="text-align:center; color:green; font-weight:bold;">
     送信が完了しました！LINEの通知をお待ちください。
-    <button class="btn" style="background:var(--disabled); margin-top:25px;" onclick="backToList()">一覧に戻る</button>
   </div>
 
   <!-- 確認モーダル -->
@@ -92,7 +104,7 @@
   </div>
 
   <script>
-    // ★ 書き換えてください ★
+    // ★ 必ず書き換えてください ★
     const GAS_URL = 'https://script.google.com/macros/s/AKfycbyn-PtGsFleWYmvFTufvbQ1ayg456sJ9hYEHB5ohbtCBCXUZALuJkNIaHgub8jk0nLa/exec';
     const LIFF_ID = '2011952211-XK8cPCVY';
     
@@ -154,13 +166,12 @@
         } else if (currentEvent.is_full) {
           showWaiting(); 
         } else {
-          document.getElementById('loading').style.display = 'block';
-          document.getElementById('loading').innerText = "現在受付を停止しているか、受付期間外です。";
+          // ★ タップした瞬間に受付が終了していた場合の画面遷移
+          showMessage("この撮影会は現在受付を停止しているか、受付期間外です。");
         }
       });
     }
 
-    // ★新規追加: 日付フォーマット関数
     function formatEventDate(isoStr) {
       if (!isoStr) return '';
       const d = new Date(isoStr);
@@ -169,7 +180,6 @@
       return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日(${days[d.getDay()]}) ${d.getHours()}:${('0'+d.getMinutes()).slice(-2)}開始`;
     }
 
-    // ★新規追加: 短縮日時フォーマット関数 (バッジ用)
     function formatShortDateTime(isoStr) {
       if (!isoStr) return '';
       const d = new Date(isoStr);
@@ -177,13 +187,13 @@
       return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${('0'+d.getMinutes()).slice(-2)}`;
     }
 
-    // ★完全刷新: 新しいカードデザインでの一覧描画
     function renderList(events) {
       document.getElementById('viewList').style.display = 'block';
       let html = '';
       if (events && events.length > 0) {
         events.forEach(ev => {
           let statusHtml = '';
+          let isClickable = false; // ★ タップ可能かどうかのフラグ
           const now = new Date().getTime();
           const openTime = ev.open_at ? new Date(ev.open_at).getTime() : 0;
           const closeTime = ev.close_at ? new Date(ev.close_at).getTime() : 0;
@@ -198,13 +208,19 @@
             }
           } else if (ev.remaining_slots <= 0) {
             statusHtml = `<div class="badge-status bg-red">満員</div>`;
+            isClickable = true; // 満員（キャンセル待ち）はタップ可能
           } else {
             statusHtml = `<div class="badge-status bg-green">空き:${ev.remaining_slots}</div>`;
+            isClickable = true; // 受付中はタップ可能
           }
 
           let displayDate = formatEventDate(ev.event_date);
+          
+          // ★ タップ不可の時は薄くしてポインターを出さない
+          let clickAttr = isClickable ? `onclick="loadEventDetails('${ev.event_id}')"` : '';
+          let cursorStyle = isClickable ? 'cursor: pointer;' : 'cursor: default; opacity: 0.6;';
 
-          html += `<div class="event-item-flex" onclick="loadEventDetails('${ev.event_id}')">
+          html += `<div class="event-item-flex" ${clickAttr} style="${cursorStyle}">
             <div style="flex:1; padding-right:10px; display:flex; flex-direction:column; justify-content:center;">
               <div style="font-size:0.85rem; color:#666; font-weight:bold;">${displayDate}</div>
               <div style="font-size:1.1rem; font-weight:bold; margin-top:4px;">${ev.title}</div>
@@ -223,6 +239,7 @@
     function showForm(isUpdating) {
       document.getElementById('viewList').style.display = 'none';
       document.getElementById('viewForm').style.display = 'block';
+      document.getElementById('topHeader').style.display = 'flex'; // ヘッダー表示
       document.getElementById('formTitle').innerText = currentEvent.title;
       
       let availableSlots = currentEvent.remaining_slots;
@@ -256,28 +273,33 @@
     function showWaiting() {
       document.getElementById('viewList').style.display = 'none';
       document.getElementById('viewWaiting').style.display = 'block';
+      document.getElementById('topHeader').style.display = 'flex'; // ヘッダー表示
     }
 
-    // ★新規追加: 一覧画面へ戻る関数
+    // ★ エラー・情報画面の表示
+    function showMessage(text) {
+      document.getElementById('viewList').style.display = 'none';
+      document.getElementById('viewMessage').style.display = 'block';
+      document.getElementById('messageText').innerText = text;
+      document.getElementById('topHeader').style.display = 'flex'; // ヘッダー表示
+    }
+
+    // ★ 一覧に戻る処理
     function backToList() {
-      // 全ての個別画面を非表示にする
       document.getElementById('viewForm').style.display = 'none';
       document.getElementById('viewWaiting').style.display = 'none';
       document.getElementById('viewSuccess').style.display = 'none';
+      document.getElementById('viewMessage').style.display = 'none';
+      document.getElementById('topHeader').style.display = 'none'; // ヘッダーを隠す
       
-      // 一覧データがまだ読み込まれていない場合（個別URLから直接飛んできた場合）は取得する
-      if (document.getElementById('eventList').innerHTML === '') {
-        document.getElementById('loading').style.display = 'block';
-        callGasApi('getEvents').then(res => {
-          document.getElementById('loading').style.display = 'none';
-          if (res.success) renderList(res.data);
-        });
-      } else {
-        // 既に一覧データがあれば、そのまま一覧画面を表示する
-        document.getElementById('viewList').style.display = 'block';
-      }
+      // 一覧に戻った時にデータを最新状態に再取得する（時間差エラー防止のため）
+      document.getElementById('viewList').style.display = 'none';
+      document.getElementById('loading').style.display = 'block';
+      callGasApi('getEvents').then(res => {
+        document.getElementById('loading').style.display = 'none';
+        if (res.success) renderList(res.data);
+      });
       
-      // 画面上部のURLから「?event_id=xxx」を消去して見た目を綺麗にする
       if (window.history && window.history.replaceState) {
         const url = new URL(window.location.href);
         url.searchParams.delete('event_id');
@@ -355,6 +377,7 @@
         document.getElementById('modal').style.display = 'none';
         document.getElementById('viewForm').style.display = 'none';
         document.getElementById('viewSuccess').style.display = 'block';
+        document.getElementById('topHeader').style.display = 'flex'; // 維持
       } else {
         document.getElementById('submitError').innerText = res.error.message;
         document.getElementById('btnSubmit').disabled = false;
@@ -383,6 +406,7 @@
       if (res.success) {
         document.getElementById('viewWaiting').style.display = 'none';
         document.getElementById('viewSuccess').style.display = 'block';
+        document.getElementById('topHeader').style.display = 'flex'; // 維持
       } else {
         alert(res.error.message);
         document.getElementById('btnWait').disabled = false;
