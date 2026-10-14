@@ -61,6 +61,7 @@
     
     <button class="btn" onclick="showConfirm()">入力内容を確認する</button>
     <button id="btnCancelRes" class="btn btn-danger" style="display:none; margin-top:15px;" onclick="cancelReservation()">この予約をキャンセルする</button>
+    <button class="btn" style="background:var(--disabled); margin-top:15px;" onclick="backToList()">一覧に戻る</button>
   </div>
 
   <!-- キャンセル待ちフォーム -->
@@ -70,11 +71,13 @@
     <label>保護者のお名前（必須）</label>
     <input type="text" id="waitName">
     <button class="btn" id="btnWait" onclick="submitWaiting()">キャンセル待ちに登録する</button>
+    <button class="btn" style="background:var(--disabled); margin-top:15px;" onclick="backToList()">一覧に戻る</button>
   </div>
 
   <!-- サクセス画面 -->
   <div id="viewSuccess" style="display:none;" class="card" style="text-align:center; color:green; font-weight:bold;">
     送信が完了しました！LINEの通知をお待ちください。
+    <button class="btn" style="background:var(--disabled); margin-top:25px;" onclick="backToList()">一覧に戻る</button>
   </div>
 
   <!-- 確認モーダル -->
@@ -253,6 +256,33 @@
     function showWaiting() {
       document.getElementById('viewList').style.display = 'none';
       document.getElementById('viewWaiting').style.display = 'block';
+    }
+
+    // ★新規追加: 一覧画面へ戻る関数
+    function backToList() {
+      // 全ての個別画面を非表示にする
+      document.getElementById('viewForm').style.display = 'none';
+      document.getElementById('viewWaiting').style.display = 'none';
+      document.getElementById('viewSuccess').style.display = 'none';
+      
+      // 一覧データがまだ読み込まれていない場合（個別URLから直接飛んできた場合）は取得する
+      if (document.getElementById('eventList').innerHTML === '') {
+        document.getElementById('loading').style.display = 'block';
+        callGasApi('getEvents').then(res => {
+          document.getElementById('loading').style.display = 'none';
+          if (res.success) renderList(res.data);
+        });
+      } else {
+        // 既に一覧データがあれば、そのまま一覧画面を表示する
+        document.getElementById('viewList').style.display = 'block';
+      }
+      
+      // 画面上部のURLから「?event_id=xxx」を消去して見た目を綺麗にする
+      if (window.history && window.history.replaceState) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('event_id');
+        window.history.replaceState({}, document.title, url);
+      }
     }
 
     function generateChildFields(presetChildren = null) {
