@@ -23,13 +23,20 @@
 
   <!-- 一覧画面 -->
   <div id="viewList" style="display:none;" class="card">
-    <h2>参加したい撮影会を選択</h2>
+    <h2 style="margin-top:0; border-bottom:2px solid var(--border); padding-bottom:10px;">募集中の撮影会</h2>
+    
     <div id="eventList"></div>
+
+    <!-- ★追加: リクエストをLINEのメッセージへ促す案内 -->
+    <div style="margin-top: 25px; padding: 15px; background: #F8F9FA; border-radius: 8px; text-align: center; font-size: 0.9rem; line-height: 1.6; border: 1px solid #EAEDED;">
+      <strong>📸 ご希望の撮影会が見つかりませんか？</strong><br>
+      「〇〇で撮影会をやってほしい！」「貸切でお願いしたい！」などのご要望・リクエストは、このLINEのトーク画面から直接メッセージでお気軽にご相談ください♪
+    </div>
   </div>
 
   <!-- 申込みフォーム画面 -->
   <div id="viewForm" style="display:none;" class="card">
-    <h2 id="formTitle"></h2>
+    <h2 id="formTitle" style="margin-top:0; border-bottom:2px solid var(--border); padding-bottom:10px;"></h2>
     <p id="formMeta" style="color:#666; font-size:0.9rem;"></p>
     
     <label>保護者のお名前（必須）</label>
@@ -48,14 +55,12 @@
     <div id="previewPrice" style="font-weight:bold; font-size:1.2rem; color:var(--accent); margin-bottom:15px; text-align:center;"></div>
     
     <button class="btn" onclick="showConfirm()">入力内容を確認する</button>
-
-    <!-- ★ ここに最初から配置されたキャンセルボタン（初期は隠れている） -->
     <button id="btnCancelRes" class="btn btn-danger" style="display:none; margin-top:15px;" onclick="cancelReservation()">この予約をキャンセルする</button>
   </div>
 
   <!-- キャンセル待ちフォーム -->
   <div id="viewWaiting" style="display:none;" class="card">
-    <h2>この撮影会は現在満員です</h2>
+    <h2 style="margin-top:0; border-bottom:2px solid var(--border); padding-bottom:10px;">現在満員です</h2>
     <p style="font-size:0.9rem;">空き枠が出た際にLINEへ一斉通知をお送りします。通知をご希望の方は以下よりご登録ください。</p>
     <label>保護者のお名前（必須）</label>
     <input type="text" id="waitName">
@@ -70,7 +75,7 @@
   <!-- 確認モーダル -->
   <div id="modal">
     <div class="modal-content">
-      <h2 id="modalTitle">申込み内容の確認</h2>
+      <h2 id="modalTitle" style="margin-top:0; border-bottom:2px solid var(--border); padding-bottom:10px;">申込み内容の確認</h2>
       <div id="confirmHtml" style="margin-bottom:20px; line-height:1.6; font-size:0.95rem;"></div>
       <button class="btn" id="btnSubmit" onclick="executeSubmit()" style="margin-bottom:10px;">確定して申し込む</button>
       <button class="btn" onclick="document.getElementById('modal').style.display='none'" style="background:#95A5A6;">修正する</button>
@@ -79,9 +84,9 @@
   </div>
 
   <script>
-    // ★ 必ず書き換えてください ★
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbyn-PtGsFleWYmvFTufvbQ1ayg456sJ9hYEHB5ohbtCBCXUZALuJkNIaHgub8jk0nLa/exec';
-    const LIFF_ID = '2011952211-XK8cPCVY';
+    // ★ 書き換えてください ★
+    const GAS_URL = 'YOUR_GAS_WEBAPP_URL';
+    const LIFF_ID = 'YOUR_LIFF_ID';
     
     var liffIdToken = null, currentEvent = null, existingApp = null;
 
@@ -127,7 +132,6 @@
       document.getElementById('loading').style.display = 'block';
       document.getElementById('loading').innerText = "撮影会情報を読み込んでいます...";
 
-      // 一覧からタップした際も正しく既存予約を読み込めるよう line_id_token をセット
       callGasApi('getEventDetails', { event_id: eventId, line_id_token: liffIdToken }).then(res => {
         document.getElementById('loading').style.display = 'none';
         if (!res.success) return alert(res.error.message);
@@ -136,11 +140,11 @@
         existingApp = res.data.existing_app;
         
         if (existingApp) {
-          showForm(true); // 予約済み
+          showForm(true); 
         } else if (currentEvent.is_accepting) {
-          showForm(false); // 新規申込み
+          showForm(false); 
         } else if (currentEvent.is_full) {
-          showWaiting(); // キャンセル待ち
+          showWaiting(); 
         } else {
           document.getElementById('loading').style.display = 'block';
           document.getElementById('loading').innerText = "現在受付を停止しているか、受付期間外です。";
@@ -151,27 +155,26 @@
     function renderList(events) {
       document.getElementById('viewList').style.display = 'block';
       let html = '';
-      events.forEach(ev => {
-        let status = ev.is_accepting ? `<span style="color:green">空き: ${ev.remaining_slots}組</span>` : `<span style="color:red">満員</span>`;
-        html += `<div class="event-item" onclick="loadEventDetails('${ev.event_id}')">
-          <strong>${ev.event_date} : ${ev.title}</strong><br>${status}
-        </div>`;
-      });
-      document.getElementById('eventList').innerHTML = html || '現在募集中の撮影会はありません';
+      if (events && events.length > 0) {
+        events.forEach(ev => {
+          let status = ev.is_accepting ? `<span style="color:green">空き: ${ev.remaining_slots}組</span>` : `<span style="color:red">満員</span>`;
+          html += `<div class="event-item" onclick="loadEventDetails('${ev.event_id}')">
+            <strong>${ev.event_date} : ${ev.title}</strong><br>${status}
+          </div>`;
+        });
+      } else {
+        html = '<p style="color:#666; text-align:center; padding:10px 0;">現在募集中の撮影会はありません。</p>';
+      }
+      document.getElementById('eventList').innerHTML = html;
     }
 
     function showForm(isUpdating) {
+      document.getElementById('viewList').style.display = 'none';
       document.getElementById('viewForm').style.display = 'block';
       document.getElementById('formTitle').innerText = currentEvent.title;
       
-      // ★追加: 残り枠数に基づいて、人数のプルダウン選択肢を動的に生成する
       let availableSlots = currentEvent.remaining_slots;
-      if (isUpdating) {
-        // 変更時は「自分が現在確保している枠数」も利用可能枠として足す
-        availableSlots += parseInt(existingApp.children_count, 10);
-      }
-      
-      // 選択肢は最大5人までとし、空き枠と比べて少ない方を上限にする
+      if (isUpdating) availableSlots += parseInt(existingApp.children_count, 10);
       let maxSelectable = Math.min(5, availableSlots);
       let selectHtml = '';
       for (let i = 1; i <= maxSelectable; i++) {
@@ -180,21 +183,18 @@
       document.getElementById('appChildCount').innerHTML = selectHtml;
 
       if (isUpdating) {
-        // ★ 予約変更・キャンセルモード
-        document.getElementById('formMeta').innerHTML = `<span style="color:red; font-weight:bold;">※既にご予約済みです。内容の変更・キャンセルが可能です。</span><br>${currentEvent.event_date}`;
+        document.getElementById('formMeta').innerHTML = `<span style="color:red; font-weight:bold;">※ご予約済み（変更・キャンセル可能）</span><br>${currentEvent.event_date}`;
         document.getElementById('appName').value = existingApp.name;
         document.getElementById('appNotes').value = existingApp.notes;
         document.getElementById('appChildCount').value = existingApp.children_count;
         generateChildFields(existingApp.children);
         
-        document.getElementById('btnCancelRes').style.display = 'block'; // キャンセルボタンを表示
+        document.getElementById('btnCancelRes').style.display = 'block';
         document.getElementById('modalTitle').innerText = "変更内容の確認";
         document.getElementById('btnSubmit').innerText = "変更を確定する";
       } else {
-        // ★ 新規申込みモード
         document.getElementById('formMeta').innerText = `${currentEvent.event_date} | 空き枠: ${currentEvent.remaining_slots}`;
-        
-        document.getElementById('btnCancelRes').style.display = 'none'; // キャンセルボタンを隠す
+        document.getElementById('btnCancelRes').style.display = 'none';
         document.getElementById('modalTitle').innerText = "申込み内容の確認";
         document.getElementById('btnSubmit').innerText = "確定して申し込む";
         generateChildFields();
@@ -202,6 +202,7 @@
     }
 
     function showWaiting() {
+      document.getElementById('viewList').style.display = 'none';
       document.getElementById('viewWaiting').style.display = 'block';
     }
 
